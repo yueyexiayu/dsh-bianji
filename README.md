@@ -1,6 +1,6 @@
 # bianji
 
-DeepSeek Harness 官方桌面端的工作区文件编辑器。会话中间列增加 **文件** 标签：左侧文件树，右侧 Monaco（失败时带行号文本框），支持 Markdown 预览、自动保存、右键添加到对话 / 复制路径 / 在访达中打开，以及拖到输入框插入 `@引用`。
+DeepSeek Harness 官方桌面端的工作区文件编辑器。右侧栏「开始」页增加 **文件** 入口（与官方工作区文件、浏览器并列）：左侧文件树，右侧 Monaco（失败时带行号文本框），支持 Markdown 预览、自动保存、右键添加到对话 / 复制路径 / 在访达中打开，以及拖到输入框插入 `@引用`。
 
 面向 **官方桌面**（`connection.fetch`），不依赖 `webServer`，也不走 `dsh plugin --profile desktop`。
 
@@ -14,7 +14,7 @@ DeepSeek Harness 官方桌面端的工作区文件编辑器。会话中间列增
       name: ../../plugins/bianji/lib/index.js
 ```
 
-完全退出 DeepSeek Harness（macOS：⌘Q）再打开。中间列会出现 **文件**。
+完全退出 DeepSeek Harness（macOS：⌘Q）再打开。展开右侧栏，在「开始」里会出现 **文件**。
 
 ## 说明
 

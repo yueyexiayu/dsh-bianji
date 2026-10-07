@@ -26,8 +26,9 @@ describe("binary policy", () => {
     assert.equal(isBinaryPath("/work/a.ts"), false);
   });
 
-  it("detects nul bytes", () => {
+  it("detects nul bytes anywhere in an editable file", () => {
     assert.equal(looksBinary(Buffer.from([65, 0, 66])), true);
+    assert.equal(looksBinary(Buffer.concat([Buffer.alloc(9000, 65), Buffer.from([0])])), true);
     assert.equal(looksBinary(Buffer.from("hello\n")), false);
   });
 });

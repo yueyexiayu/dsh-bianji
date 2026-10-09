@@ -338,13 +338,9 @@ test("Monaco unmount disposes its owned model and subscription", async () => {
   assert.deepEqual(m.disposal, { editor: 1, model: 1, listener: 1 });
 });
 
-test("stalled Monaco mirrors time out into an editable fallback and clean late callbacks", async () => {
+test("Monaco load failure falls back to an editable textarea", async () => {
   const c = client(); await c.open(); const m = await c.monaco(false);
-  const staleLoad = c.scripts[0].onload;
-  await m.timeout(); await m.timeout(); await m.timeout();
-  assert.equal(c.scripts.length, 3);
-  assert.ok(c.scripts.every((script) => script.removed && script.onload === null && script.onerror === null));
-  staleLoad();
+  assert.equal(c.scripts.some((script) => /jsdelivr|unpkg|fastly/i.test(String(script.src || ""))), false);
   assert.ok(m.tree().children.some((node) => node.type?.name === "LinedTextarea"));
   assert.ok(m.tree().children.some((node) => node.props.role === "status"));
 });

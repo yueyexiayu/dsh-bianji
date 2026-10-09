@@ -46,7 +46,7 @@ async function host(t) {
     },
   };
   const agent = { session: { header: { cwd: root } }, ctx: { get: (name) => name === "fs" ? service : name === "sandboxPolicy" ? { resolve: () => policy } : undefined } };
-  apply({ connection: { fetch: { register(value) { route = value; } } }, get: (name) => name === "agents" ? { get: () => agent } : undefined });
+  apply({ connection: { fetch: { register(value) { if (value.path === "/api/bianji") route = value; } } }, get: (name) => name === "agents" ? { get: () => agent } : undefined });
   return {
     root, file, service, agent, writes: () => writes,
     async read(requested = file) { return (await route.fetch(new Request("http://local/api/bianji?action=read&sessionId=s&path=" + encodeURIComponent(requested)))).json(); },

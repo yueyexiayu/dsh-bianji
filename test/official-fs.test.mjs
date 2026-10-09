@@ -32,7 +32,7 @@ async function host(t, mode = "workspace-write") {
   const service = new official.SandboxedFileSystem(ctx, { cwd: root, diffBasisMaxBytes: 10 * 1024 * 1024 });
   const agent = { session: { header: { cwd: root } }, ctx: { get: (name) => name === "fs" ? service : name === "sandboxPolicy" ? { resolve: () => policy } : undefined } };
   let route;
-  apply({ connection: { fetch: { register(value) { route = value; } } }, get: (name) => name === "agents" ? { get: () => agent } : undefined });
+  apply({ connection: { fetch: { register(value) { if (value.path === "/api/bianji") route = value; } } }, get: (name) => name === "agents" ? { get: () => agent } : undefined });
   async function request(action, filePath = file, extra = {}) {
     const req = action === "write"
       ? new Request("http://local/api/bianji", { method: "POST", body: JSON.stringify({ action, sessionId: "s", path: filePath, ...extra }) })

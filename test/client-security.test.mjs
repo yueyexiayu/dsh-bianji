@@ -162,7 +162,10 @@ test("real React DOM scopes shortcuts and drops, retries errors, and cleans up o
     await page.evaluate(() => {
       let FilesTab;
       const shell = { editor: { getRootElement: () => document.getElementById("composer") }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference(reference) { window.__state.references.push(reference); return true; } };
-      const services = { conversation: { input: { shell: () => shell } } };
+      const services = {
+        sessions: { binding: (id) => id ? { ctx: { sessionId: id } } : undefined },
+        conversation: { input: { for: () => shell, shell: () => { throw new Error("plugin must not call input.shell"); } } },
+      };
       const ctx = {
         get(name) { return services[name]; },
         effect(callback) { return callback(); },

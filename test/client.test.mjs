@@ -72,7 +72,11 @@ function client(options = {}) {
       return signal;
     } } } : {}),
   });
-  plugin.apply({ conversation: { input: { shell: () => ({ editor: { getRootElement: () => composerRoot }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference() { inserted++; return true; } }) } }, effect: (callback) => callback(), sidebarRightTabs: { register() {} }, slots: {
+  const shell = { editor: { getRootElement: () => composerRoot }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference() { inserted++; return true; } };
+  plugin.apply({ get(name) {
+    if (name === "sessions") return { binding: (id) => id ? { ctx: { sessionId: id } } : undefined };
+    if (name === "conversation") return { input: { for: () => shell, shell: () => { throw new Error("plugin must not call input.shell"); } } };
+  }, effect: (callback) => callback(), sidebarRightTabs: { register() {} }, slots: {
     inject(_name, callback) { return callback(); }, register(options, component) { if (options.name === "sidebar.right.pane.tab") FilesTab = component; },
   } });
   const component = FilesTab({ sessionId: "s" }).type;

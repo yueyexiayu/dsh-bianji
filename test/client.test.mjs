@@ -8,7 +8,7 @@ function client(options = {}) {
   let plugin; let FilesTab; let cursor = 0; let tree;
   let hooks = [];
   const effects = []; const timers = new Map(); const writes = []; const reads = [];
-  const listeners = new Map(); const failures = new Map(Object.entries(options.failures ?? {})); const scripts = [];
+  const listeners = new Map(); const failures = new Map(Object.entries(options.failures ?? {})); const scripts = []; const timeoutDelays = [];
   let inserted = 0;
   const composerRoot = { isContentEditable: true, contains: (target) => target === composerRoot };
   let delayRead = false;
@@ -38,6 +38,7 @@ function client(options = {}) {
     addEventListener(name, callback) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(callback); },
     removeEventListener(name, callback) { listeners.get(name)?.delete(callback); },
   };
+  function schedule(callback, delay) { timers.set(++timerId, callback); timeoutDelays.push(delay); return timerId; }
   vm.runInNewContext(readFileSync(new URL("../lib/client.js", import.meta.url), "utf8"), {
     window: clientWindow,
     document: { getElementById: () => ({}), createElement: () => ({ remove() { this.removed = true; } }), head: { appendChild: (el) => scripts.push(el) } }, URL, URLSearchParams, Map,
@@ -51,12 +52,25 @@ function client(options = {}) {
         return new Promise((resolve) => writes.push({ body: JSON.parse(init.body), finish: (body) => resolve({ json: async () => body }) }));
       }
       const params = new URL(url, "http://local").searchParams;
+      if ((options.hang ?? []).includes(params.get("action"))) {
+        return new Promise((_resolve, reject) => {
+          const fail = () => reject(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }));
+          if (init?.signal?.aborted) fail();
+          else init?.signal?.addEventListener("abort", fail);
+        });
+      }
       if (params.get("action") === "read" && delayRead) return new Promise((resolve) => reads.push({ finish: (body) => resolve({ json: async () => body }) }));
       return Promise.resolve({ json: async () => params.get("action") === "read"
         ? { ok: true, path: params.get("path"), relative: "a.txt", ...disk }
         : { ok: true, root: "/workspace", entries: [{ name: "a.txt", type: "file", path: "/workspace/a.txt", relative: "a.txt" }] } });
     },
-    setTimeout(callback) { timers.set(++timerId, callback); return timerId; }, clearTimeout(id) { timers.delete(id); },
+    setTimeout(callback, delay) { return schedule(callback, delay); }, clearTimeout(id) { timers.delete(id); },
+    ...(options.useAbortTimeout ? { AbortSignal: { timeout(ms) {
+      const listeners = new Set();
+      const signal = { aborted: false, addEventListener(type, fn) { if (type === "abort") listeners.add(fn); }, removeEventListener(type, fn) { listeners.delete(fn); } };
+      schedule(() => { signal.aborted = true; for (const fn of listeners) fn(); }, ms);
+      return signal;
+    } } } : {}),
   });
   plugin.apply({ conversation: { input: { shell: () => ({ editor: { getRootElement: () => composerRoot }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference() { inserted++; return true; } }) } }, effect: (callback) => callback(), sidebarRightTabs: { register() {} }, slots: {
     inject(_name, callback) { return callback(); }, register(options, component) { if (options.name === "sidebar.right.pane.tab") FilesTab = component; },
@@ -72,7 +86,8 @@ function client(options = {}) {
   }
   render();
   return {
-    writes, reads, render, find, scripts, composerRoot,
+    writes, reads, render, find, scripts, composerRoot, timeoutDelays,
+    flushTimers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach((callback) => callback()); },
     fail(action, failure) { failures.set(action, failure); },
     focusPanel(target) { tree.props.ref.current = { contains: (value) => value === target }; },
     event(name, target, extras = {}) {
@@ -305,6 +320,24 @@ test("file drag only inserts into its own mounted editable composer", async () =
   assert.equal(c.event("drop", c.composerRoot).stopped, true);
   assert.equal(c.inserted(), 1);
   assert.equal(c.event("drop", c.composerRoot).defaultPrevented, false);
+});
+
+test("a hung directory request times out into an error and retry instead of staying on the loading label", async () => {
+  const c = client({ hang: ["list"], useAbortTimeout: true });
+  assert.equal(c.find((node) => node.type === "div" && node.children[0] === "加载目录…") == null, false);
+  assert.ok(c.timeoutDelays.includes(15000));
+  c.flushTimers();
+  await c.settle();
+  assert.equal(c.find((node) => node.type === "div" && node.children[0] === "加载目录…"), null);
+  assert.match(c.find((node) => node.props.role === "alert").children[0], /请求超时/);
+  assert.equal(c.find((node) => node.type === "button" && node.children[0] === "重试").props.disabled, undefined);
+});
+
+test("tab strip scrolls horizontally instead of clipping tabs", () => {
+  const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
+  assert.match(source, /\.dshf-tabs-strip \{[^}]*overflow-x: auto/);
+  assert.doesNotMatch(source, /\.dshf-tabs-strip \{[^}]*overflow:\s*hidden/);
+  assert.match(source, /\.dshf-tab-chip \{[^}]*flex:\s*none/);
 });
 
 test("network failures leave visible errors and retries load the requested resource", async () => {

@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const tick = () => new Promise(setImmediate);
 function client(options = {}) {
-  let plugin; let FilesTab; let cursor = 0; let tree;
+  let plugin; let FilesTab; let cursor = 0; let tree; let tabDefinition;
   let hooks = [];
   const effects = []; const timers = new Map(); const writes = []; const reads = [];
   const listeners = new Map(); const failures = new Map(Object.entries(options.failures ?? {})); const scripts = []; const timeoutDelays = [];
@@ -76,7 +76,7 @@ function client(options = {}) {
   plugin.apply({ get(name) {
     if (name === "sessions") return { binding: (id) => id ? { ctx: { sessionId: id } } : undefined };
     if (name === "conversation") return { input: { for: () => shell, shell: () => { throw new Error("plugin must not call input.shell"); } } };
-  }, effect: (callback) => callback(), sidebarRightTabs: { register() {} }, slots: {
+  }, effect: (callback) => callback(), sidebarRightTabs: { register(definition) { tabDefinition = definition; } }, slots: {
     inject(_name, callback) { return callback(); }, register(options, component) { if (options.name === "sidebar.right.pane.tab") FilesTab = component; },
   } });
   const component = FilesTab({ sessionId: "s" }).type;
@@ -90,7 +90,7 @@ function client(options = {}) {
   }
   render();
   return {
-    writes, reads, render, find, scripts, composerRoot, timeoutDelays,
+    writes, reads, render, find, scripts, composerRoot, timeoutDelays, tabDefinition,
     flushTimers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach((callback) => callback()); },
     fail(action, failure) { failures.set(action, failure); },
     focusPanel(target) { tree.props.ref.current = { contains: (value) => value === target }; },
@@ -136,6 +136,13 @@ function client(options = {}) {
     },
   };
 }
+
+test("editor uses a distinct labelled entry without replacing official files", () => {
+  const c = client();
+  assert.equal(c.tabDefinition.kind, "bianji"); assert.equal(c.tabDefinition.title(), "编辑器");
+  assert.equal(c.tabDefinition.guide[0].title(), "编辑器");
+  c.unmount();
+});
 
 test("typing during a save retains the new draft and advances the next request's baseline", async () => {
   const c = client(); await c.open(); c.edit("first draft"); c.autosave();

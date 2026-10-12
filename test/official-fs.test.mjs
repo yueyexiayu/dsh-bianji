@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { apply } from "../lib/index.js";
+import { officialSessionFixture } from "./official-session-fixture.mjs";
 
 // Opt in explicitly: ordinary Node cannot load modules inside Electron's ASAR.
 // Run this file using ELECTRON_RUN_AS_NODE=1 and the installed desktop executable.
@@ -13,8 +14,7 @@ const official = runtime ? await (async () => {
   const base = pathToFileURL(path.join(runtime, "node_modules") + path.sep).href;
   const { Context } = await import(base + "@deepseek-ai/cordis/lib/index.js");
   const { SandboxedFileSystem } = await import(base + "@deepseek-ai/dsh-fs-sandbox/lib/index.js");
-  const { WorkspaceFiles } = await import(base + "@deepseek-ai/dsh-api-workspace-files/lib/index.js");
-  return { Context, SandboxedFileSystem, WorkspaceFiles };
+  return { Context, SandboxedFileSystem };
 })() : undefined;
 const check = (name, run) => test(name, { skip: official ? false : "Set BIANJI_OFFICIAL_RUNTIME and run with the installed Electron executable" }, run);
 
@@ -43,31 +43,61 @@ async function host(t, mode = "workspace-write") {
   return { root, file, service, policy, read: (filePath) => request("read", filePath), write: (content, version, filePath) => request("write", filePath, { content, version }) };
 }
 
-check("official workspace tree supports persisted sessions without live agents; editor currently does not", async (t) => {
-  const h = await host(t);
-  const ctx = new official.Context();
-  let lookup;
-  const services = {
-    fs: h.service,
-    sandboxPolicy: { workspaceRoot: h.root },
-    sessions: { get: () => undefined },
-    sessionPersistence: { stat: async () => ({ header: { cwd: h.root } }) },
-    typert: { lookups: { register: (_name, value) => { lookup = value; } } },
-  };
-  for (const [name, service] of Object.entries(services)) {
-    ctx.provide(name); ctx.set(name, service);
-  }
-  const tree = new official.WorkspaceFiles(ctx, { maxBytes: 2097152, maxFileBytes: 33554432, maxLines: 5000, maxEntries: 2000 });
-  await Promise.resolve();
-  assert.ok(lookup, "packaged service registered its real scope resolver");
-  const scope = await lookup.resolve("historical-session");
-  assert.equal(scope.workspaceRoot, h.root);
-  assert.ok((await tree.list(scope, ".")).entries.some((entry) => entry.name === "sample.txt"));
+async function coldHost(t) {
+  const tmp = await fs.mkdtemp("/tmp/bianji-cold-official-"); const root = await fs.realpath(tmp);
+  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  const file = path.join(root, "sample.txt"); await fs.writeFile(file, "original");
+  const official = await officialSessionFixture(runtime, root); t.after(() => official.close());
   let route;
-  apply({ connection: { fetch: { register: (value) => { route = value; } } }, get: (name) => name === "agents" ? { get: () => undefined } : services[name] });
-  const result = await route.fetch(new Request("http://local/api/bianji?action=list&sessionId=historical-session"));
-  assert.equal(result.status, 400);
-  assert.deepEqual(await result.json(), { ok: false, error: "no workspace for this session" });
+  apply({ get: (key) => official.ctx.get(key), connection: { fetch: { register(def) { if (def.path === "/api/bianji") route = def.fetch; } } } });
+  const call = async (action, extra = {}) => {
+    const response = await route(new Request("http://fixture/api/bianji", { method: "POST", body: JSON.stringify({ action, sessionId: "cold", path: file, ...extra }) }));
+    return { status: response.status, body: await response.json() };
+  };
+  return { ...official, root, file, call };
+}
+
+check("official SessionController inspects cold history for list/read without activation or mutation", async (t) => {
+  const h = await coldHost(t);
+  assert.equal((await h.call("list", { path: "." })).body.entries[0].name, "sample.txt");
+  const read = await h.call("read"); assert.equal(read.status, 200); assert.equal(read.body.content, "original");
+  assert.equal(h.ctx.sessions.get("cold"), undefined);
+  assert.deepEqual(h.counts(), { activations: 0, mutations: 0, handles: 0 });
+});
+
+check("official cold policy folds persisted mode on every save and retains observed baseline", async (t) => {
+  const h = await coldHost(t); const read = await h.call("read");
+  assert.equal((await h.call("write", { content: "draft", version: read.body.version })).status, 403);
+  h.setMode("workspace-write");
+  const saved = await h.call("write", { content: "saved", version: read.body.version }); assert.equal(saved.status, 200);
+  await fs.writeFile(h.file, "external");
+  assert.equal((await h.call("write", { content: "stale", version: saved.body.version })).status, 409);
+  assert.equal(await fs.readFile(h.file, "utf8"), "external");
+  assert.deepEqual(h.counts(), { activations: 0, mutations: 0, handles: 0 });
+});
+
+check("official attached Session without an Agent reuses its dynamic policy, never prepare/activate", async (t) => {
+  const h = await coldHost(t);
+  const snapshot = await h.controller.inspect("cold");
+  const session = h.ctx.sessions.prepare("cold", { meta: snapshot.meta, seed: snapshot.events });
+  const detach = h.ctx.sessions.enter(session); t.after(detach);
+  const initialEvents = session.snapshotEvents().length;
+  const read = await h.call("read"); assert.equal(read.status, 200);
+  assert.equal((await h.call("write", { content: "denied", version: read.body.version })).status, 403);
+  session.append("sandbox/mode", { mode: "workspace-write" });
+  assert.equal((await h.call("write", { content: "saved", version: read.body.version })).status, 200);
+  assert.equal(h.ctx.sessions.get("cold"), session); assert.equal(h.counts().activations, 0);
+  assert.equal(session.snapshotEvents().length, initialEvents + 1, "only fixture's mode-change appended an event");
+});
+
+check("official inspection distinguishes unknown, corrupt and missing-cwd history", async (t) => {
+  const h = await coldHost(t);
+  assert.equal((await h.call("root", { sessionId: "unknown" })).status, 404);
+  h.snapshots.set("cold", { meta: h.meta, events: [{ type: "turn/start", seq: 7, time: 1, data: { turn: 1 } }], revision: "corrupt" });
+  assert.equal((await h.call("root")).status, 500);
+  const empty = h.ctx.sessions.prepare("no-cwd"); const detach = h.ctx.sessions.enter(empty); t.after(detach);
+  assert.equal((await h.call("root", { sessionId: "no-cwd" })).status, 400);
+  assert.equal(h.counts().activations, 0); assert.equal(h.counts().handles, 0);
 });
 
 check("official FS: read baseline is the provider's actual version", async (t) => {

@@ -2,7 +2,7 @@
 
 当前项目是深度适配个人使用，项目只是给大家提供思路和借鉴，尽量不要直接照搬。
 
-DeepSeek Harness 官方桌面端的工作区文件编辑器。右侧栏「开始」页增加 **文件** 入口（与官方工作区文件、浏览器并列）：左侧文件树，右侧 Monaco（失败时带行号文本框），支持 Markdown 预览、自动保存、右键添加到对话 / 复制路径 / 在访达中打开，以及拖到输入框插入 `@引用`。
+DeepSeek Harness 官方桌面端的工作区文件编辑器。右侧栏「开始」页增加 **编辑器** 入口（与官方工作区文件、浏览器并列）：左侧文件树，右侧 Monaco（失败时带行号文本框），支持 Markdown 预览、自动保存、右键添加到对话 / 复制路径 / 在访达中打开，以及拖到输入框插入 `@引用`。
 
 面向 **官方桌面**（`connection.fetch`），不依赖 `webServer`，也不走 `dsh plugin --profile desktop`。
 
@@ -16,11 +16,12 @@ DeepSeek Harness 官方桌面端的工作区文件编辑器。右侧栏「开始
       name: ../../plugins/bianji/lib/index.js
 ```
 
-完全退出 DeepSeek Harness（macOS：⌘Q）再打开。展开右侧栏，在「开始」里会出现 **文件**。
+完全退出 DeepSeek Harness（macOS：⌘Q）再打开。展开右侧栏，在「开始」里会出现 **编辑器**。
 
 ## 说明
 
-- 读写限制在当前会话工作区 `cwd` 内
+- 读写限制在当前会话工作区 `cwd` 内。live Agent 优先；没有 Agent 时，通过官方 `sessionController.inspect(sessionId, signal)` 只读解析 attached / 持久化历史，不调用 Agent 的 create/resume，不改变模型、事件或会话归属。缺少 sessionId / 绝对 cwd（含相对 cwd）返回 400，未知会话 404，缺少检查服务 503，持久化读取或损坏错误 500；错误不会变成假的空工作区。
+- 历史保存沿用官方 `sandboxPolicy.resolve({ session })`。已 attached、无 Agent 的 Session 直接复用；真正冷历史通过官方 `sessions.prepare` 构建未发布快照，让官方 sandboxMode projection 重放权限。每次保存重新检查，既保留历史 read-only 覆盖，又不继承 Host 的宽松 cwd。缺少安全策略或 prepare 服务时拒绝保存。
 - 只支持严格 UTF-8 文本；非 UTF-8（如本次验证的 GBK 字节）、二进制与过大文件会明确拒绝打开，不做有损替换。读写接口不移除 UTF-8 BOM，不自动转换编码或换行。保存前拒绝 NUL、孤立 UTF-16 surrogate 和读端不支持的控制字节，避免保存后乱码或无法重新打开。
 - POSIX（含 macOS）路径保留文件名中的 `\`，不将它转换为目录分隔符。读写继续使用官方 `fs`，并通过 `processPath()` 核对实际目标及读取前后真实路径，拒绝已复现的符号链接替换越界返回；这不是内核级原子路径隔离。
 - Markdown 预览只生成经过转义的受限标签和 HTTP(S) 链接，不执行原始 HTML。编辑快捷键限于编辑区，文件拖拽引用限于聊天输入区；目录和文件请求失败显示错误并提供重试，访达启动失败不会显示成功。
@@ -60,8 +61,17 @@ BIANJI_REACT_DOM_UMD=/path/to/react-dom/umd/react-dom.development.js \
   node --test test/client-security.test.mjs
 ```
 
-本次在 DSH **0.2.1-alpha.1** 上实际执行：37 项 Host 回归、24 项 Client 回归、2 项真实浏览器检查（14 组 XSS payload 及 React 交互），以及 17 项官方安装包集成，全部通过且无跳过。官方集成涵盖版本保护、读写冲突、AI 编辑共用锁、只读拒写、严格编码和路径检查。
+2026-10-12 在 DSH **0.2.1-alpha.2** 的只读解包参考上实际验证：bianji + jiyi 完整回归共 **245/245 通过，0 跳过**，包含 **21 项官方服务集成**（bianji 20、jiyi 1）和 3 项独立 Chrome 真浏览器测试（14 组 XSS payload、React 操作、快捷键/拖拽/重试/卸载清理及记忆取消/失败状态）。新增历史及生命周期用例修复前 13/13 失败，修复后通过。Monaco、自动保存、草稿保留和 CAS 冲突回归仍保留。
 
-历史会话范围也用安装包服务在隔离上下文实际验证：没有 live session / agent 时，官方文件树能用持久化 header 找到工作区并列目录；本插件目前只认 live agent，会明确返回 `no workspace for this session`。本轮未扩展这部分行为。
+官方历史测试实际构造 `SessionController`、`SessionQueryEngine`、`SessionStore`、`SessionProjectionRegistry`、`SandboxPolicyService` 与 `SandboxedFileSystem`；仅持久化 I/O 和不用的 transport/Agent 激活端点是 fixture。断言 cold read/list 的 Agent 激活、会话事件修改、未关闭读取 handle 均为 0，并实测历史权限切换、无 Agent 的 attached Session、损坏/缺失历史、外部改写后的旧基线拒绝。测试只创建 /tmp 文件，临时服务和目录释放后清理。
 
-上述浏览器检查使用模拟 API；官方服务检查使用临时上下文。这些不是已经重启加载新代码的桌面端端到端验收。Host / Client 修改后仍须完全退出并重新打开应用；刷新页面不足以更新 Host。退出前先保存或复制尚未落盘的内存草稿。
+复用评估：官方 `dsh-client-ui-sidebar-files` 提供 `workspaceFiles.list/changes` 文件浏览树，没有 Monaco、编辑写入或 CAS 自动保存界面；其 scope resolver 使用持久化 header，而 read 允许工作区外的路径。它不能直接替代本编辑器的严格工作区边界和草稿/冲突机制。因此保留独立 `kind: bianji`，名称统一为“编辑器”，不注册或覆盖官方 `files`，Host 的历史检查和权限/写入仍复用官方服务。
+
+解包参考也可直接用普通 Node 验证，不修改官方包：
+
+```bash
+TMPDIR=/tmp BIANJI_OFFICIAL_RUNTIME=/absolute/read-only/dsh \
+  /usr/local/bin/node --test test/official-fs.test.mjs
+```
+
+上述浏览器检查使用模拟 API；官方服务检查使用临时上下文，不是已加载最新代码的桌面端端到端验收。本轮按要求未重启 Host、未改公共配置；运行中的 Host 仍是原代码。退出前先保存或复制尚未落盘的内存草稿。

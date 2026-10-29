@@ -60,8 +60,8 @@ function client(options = {}) {
         });
       }
       if (params.get("action") === "read" && delayRead) return new Promise((resolve) => reads.push({ finish: (body) => resolve({ json: async () => body }) }));
-      return Promise.resolve({ json: async () => params.get("action") === "read"
-        ? { ok: true, path: params.get("path"), relative: "a.txt", ...disk }
+      return Promise.resolve({ json: async () => (params.get("action") === "read" || params.get("action") === "open")
+        ? { ok: true, kind: "text", path: params.get("path"), relative: "a.txt", ...disk }
         : { ok: true, root: "/workspace", entries: [{ name: "a.txt", type: "file", path: "/workspace/a.txt", relative: "a.txt" }] } });
     },
     setTimeout(callback, delay) { return schedule(callback, delay); }, clearTimeout(id) { timers.delete(id); },
@@ -357,7 +357,7 @@ test("network failures leave visible errors and retries load the requested resou
   assert.equal(c.find((node) => node.type === "div" && node.children[0] === "加载目录…"), null);
   c.find((node) => node.type === "button" && node.children[0] === "重试").props.onClick(); await c.settle();
   assert.ok(c.find((node) => node.type?.name === "TreeNode"));
-  c.fail("read", new Error("file read offline")); await c.open();
+  c.fail("open", new Error("file read offline")); await c.open();
   assert.match(c.find((node) => node.props.role === "alert").children[0], /file read offline/);
   assert.equal(c.draft(), undefined);
   c.find((node) => node.type === "button" && node.children[0] === "重试").props.onClick(); await c.settle();
@@ -366,11 +366,11 @@ test("network failures leave visible errors and retries load the requested resou
 
 test("HTTP and invalid JSON responses cannot masquerade as successful file loads", async () => {
   const c = client(); await c.settle();
-  c.fail("read", { ok: false, status: 503, json: async () => ({ ok: true, content: "wrong", path: "/workspace/a.txt", version: "v2" }) });
+  c.fail("open", { ok: false, status: 503, json: async () => ({ ok: true, content: "wrong", path: "/workspace/a.txt", version: "v2" }) });
   await c.open();
   assert.match(c.find((node) => node.props.role === "alert").children[0], /HTTP 503/);
   assert.equal(c.draft(), undefined);
-  c.fail("read", { ok: false, status: 502, json: async () => { throw new SyntaxError("HTML response"); } });
+  c.fail("open", { ok: false, status: 502, json: async () => { throw new SyntaxError("HTML response"); } });
   await c.open();
   assert.match(c.find((node) => node.props.role === "alert").children[0], /无效响应.*HTTP 502/);
   c.find((node) => node.type === "button" && node.children[0] === "重试").props.onClick(); await c.settle();
@@ -455,12 +455,21 @@ test("invalid JSON envelopes and non-string file metadata never open a file", as
   const c = client(); await c.settle();
   for (const body of [null, [], "ok", { ok: "true", content: "bad", path: "/workspace/a.txt", version: "v1" },
     { ok: true, content: "bad", path: {}, version: "v1" }, { ok: true, content: "bad", path: "/workspace/a.txt", version: {} }]) {
-    c.fail("read", { ok: true, status: 200, json: async () => body }); await c.open();
+    c.fail("open", { ok: true, status: 200, json: async () => body }); await c.open();
     assert.equal(c.draft(), undefined);
     assert.ok(c.find((node) => node.props.role === "alert"));
   }
   c.find((node) => node.type === "button" && node.children[0] === "重试").props.onClick(); await c.settle();
   assert.equal(c.draft(), "original");
+});
+
+test("opening an image uses a read-only preview instead of the text editor", async () => {
+  const c = client(); await c.settle();
+  c.fail("open", { ok: true, status: 200, json: async () => ({ ok: true, kind: "image", path: "/workspace/a.png", relative: "a.png", media: true, size: 12 }) });
+  await c.open("/workspace/a.png");
+  assert.equal(c.find((node) => node.type?.name === "CodeEditor"), null);
+  assert.ok(c.find((node) => node.type?.name === "FilePreview"));
+  assert.equal(c.find((node) => node.type === "button" && node.children[0] === "保存").props.disabled, true);
 });
 
 test("write and reveal requests use the same timeout as directory reads", () => {

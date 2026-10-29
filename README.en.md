@@ -4,7 +4,7 @@
 <p><strong>Edit beside the conversation. Keep your workspace and drafts connected.</strong></p>
 <p>A file tree, Monaco editing and Markdown preview in the DeepSeek Harness desktop sidebar.</p>
 <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-<p><a href="package.json">v0.1.2</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.1.3</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#saving-and-boundaries">Saving and boundaries</a> · <a href="#validation">Validation</a></p>
 </div>
 
@@ -16,7 +16,7 @@ A desktop plugin tailored to a personal workflow. Treat it as a reference and ve
 
 <table><tr>
 <td width="33%"><strong>🗂 Workspace tree</strong><br/><br/>Resolve files from the current session and open them beside the conversation, without starting an Agent to inspect history. Hides <code>node_modules</code> / <code>.git</code> by default and can filter by filename.</td>
-<td width="33%"><strong>✍️ Editing and preview</strong><br/><br/>Monaco and a restricted Markdown preview, with a line-numbered text-area fallback if Monaco is unavailable.</td>
+<td width="33%"><strong>✍️ Editing and preview</strong><br/><br/>Monaco and a restricted Markdown preview. Images, audio, video and PDF open read-only; docx/pptx/xlsx show extracted text or a table glance. Binary and Office originals are not saved here.</td>
 <td width="33%"><strong>🧾 Version-aware writes</strong><br/><br/>Read a version and save through the official replaceIfVersion service. Conflicts pause autosave, not discard drafts.</td>
 </tr><tr>
 <td><strong>🔗 Conversation references</strong><br/><br/>Add to chat, copy a path, reveal in Finder or drag into the composer as an @reference.</td>

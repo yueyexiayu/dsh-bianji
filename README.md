@@ -4,7 +4,7 @@
 <p><strong>在对话旁编辑文件，让草稿与工作区保持连贯。</strong></p>
 <p>DeepSeek Harness 桌面端右侧栏的文件树、Monaco 编辑与 Markdown 预览。</p>
 <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-<p><a href="package.json">v0.1.2</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.1.3</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#核心能力">核心能力</a> · <a href="#工作方式">工作方式</a> · <a href="#快速开始">快速开始</a> · <a href="#保存与边界">保存与边界</a> · <a href="#验证">验证</a></p>
 </div>
 
@@ -16,7 +16,7 @@
 
 <table><tr>
 <td width="33%"><strong>🗂 工作区文件树</strong><br/><br/>从当前会话解析工作区，浏览文件并在右侧打开；不为读取历史会话启动 Agent。默认隐藏 <code>node_modules</code> / <code>.git</code>，可过滤文件名。</td>
-<td width="33%"><strong>✍️ 文本与预览</strong><br/><br/>Monaco 编辑、受限 Markdown 预览；Monaco 不可用时退回带行号文本框。</td>
+<td width="33%"><strong>✍️ 文本与预览</strong><br/><br/>Monaco 编辑、受限 Markdown 预览；图片/音视频/PDF 只读查看；docx/pptx/xlsx 抽文本或表格预览。不在此编辑二进制或 Office 原件。</td>
 <td width="33%"><strong>🧾 版本保护</strong><br/><br/>读取版本并使用官方 replaceIfVersion 保存，冲突暂停自动保存而不丢弃草稿。</td>
 </tr><tr>
 <td><strong>🔗 对话引用</strong><br/><br/>右键添加到对话、复制路径、访达打开，或拖到输入框插入 @引用。</td>

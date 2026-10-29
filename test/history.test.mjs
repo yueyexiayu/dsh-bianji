@@ -34,7 +34,7 @@ async function fixture(t, { inspect, policy = true } = {}) {
     const response = await route(new Request("http://fixture/api/bianji", { method: "POST", body: JSON.stringify({ action, sessionId: "cold", path: file, ...extra }) }));
     return { status: response.status, body: await response.json() };
   };
-  return { cwd, file, call, services, resumes: () => resumes, observedPolicy: () => observedPolicy };
+  return { cwd, file, call, route, services, resumes: () => resumes, observedPolicy: () => observedPolicy };
 }
 
 test("cold history lists and reads without creating or resuming an agent", async (t) => {
@@ -75,5 +75,50 @@ for (const source of ["cold", "live"]) test(`${source} relative cwd is rejected 
 test("missing sandbox policy fails before a historical write", async (t) => {
   const h = await fixture(t, { policy: false });
   assert.equal((await h.call("write", { content: "draft", version: "v1" })).status, 503);
+  assert.equal(await readFile(h.file, "utf8"), "original");
+});
+
+test("cold history prefers sessionQuery.observeSession and disposes the lease", async (t) => {
+  const h = await fixture(t, { inspect: async () => { throw new Error("inspect must not run"); } });
+  let disposed = 0;
+  let observed = 0;
+  h.services.sessionQuery = {
+    observeSession: async (id, options) => {
+      observed += 1;
+      assert.equal(id, "cold");
+      assert.equal(options?.projectionMode, "none");
+      return {
+        header: { id, cwd: h.cwd },
+        events: [{ type: "sandbox/mode", data: { mode: "read-only" } }],
+        inheritedEventCount: 0,
+        [Symbol.dispose]: () => { disposed += 1; },
+      };
+    },
+  };
+  assert.equal((await h.call("read")).body.content, "original");
+  assert.equal(observed, 1);
+  assert.equal(disposed, 1);
+  assert.equal(h.resumes(), 0);
+});
+
+test("attached Session without an Agent uses sessions.get and skips inspect", async (t) => {
+  const h = await fixture(t, { inspect: async () => { throw new Error("inspect must not run"); } });
+  h.services.sessions.get = () => ({
+    header: { id: "cold", cwd: h.cwd },
+    events: [{ type: "sandbox/mode", data: { mode: "read-only" } }],
+    snapshotEvents: () => [{ type: "sandbox/mode", data: { mode: "read-only" } }],
+  });
+  assert.equal((await h.call("read")).body.content, "original");
+  assert.equal((await h.call("write", { content: "draft", version: "v1" })).status, 403);
+  assert.equal(h.resumes(), 0);
+});
+
+test("malformed JSON is rejected before filesystem I/O", async (t) => {
+  const h = await fixture(t);
+  const response = await h.route(new Request("http://fixture/api/bianji", { method: "POST", body: "{not json" }));
+  const body = await response.json();
+  assert.equal(response.status, 400);
+  assert.equal(body.ok, false);
+  assert.match(body.error, /invalid json/);
   assert.equal(await readFile(h.file, "utf8"), "original");
 });

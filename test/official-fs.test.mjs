@@ -78,9 +78,11 @@ check("official cold policy folds persisted mode on every save and retains obser
 
 check("official attached Session without an Agent reuses its dynamic policy, never prepare/activate", async (t) => {
   const h = await coldHost(t);
-  const snapshot = await h.controller.inspect("cold");
-  const session = h.ctx.sessions.prepare("cold", { meta: snapshot.meta, seed: snapshot.events });
-  const detach = h.ctx.sessions.enter(session); t.after(detach);
+  const stored = h.snapshots.get("cold");
+  const session = h.ctx.sessions.prepare("cold", { meta: stored.meta, seed: stored.events });
+  const detach = h.ctx.sessions.enter(session);
+  h.ctx.sessions.announce(session);
+  t.after(detach);
   const initialEvents = session.snapshotEvents().length;
   const read = await h.call("read"); assert.equal(read.status, 200);
   assert.equal((await h.call("write", { content: "denied", version: read.body.version })).status, 403);

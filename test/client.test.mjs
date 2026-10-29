@@ -463,6 +463,24 @@ test("invalid JSON envelopes and non-string file metadata never open a file", as
   assert.equal(c.draft(), "original");
 });
 
+test("write and reveal requests use the same timeout as directory reads", () => {
+  const source = readFileSync(new URL("../lib/client.js", import.meta.url), "utf8");
+  assert.match(source, /function apiPost\(body\) \{[\s\S]*apiTimeoutSignal\(\)/);
+  assert.match(source, /function apiWrite\([\s\S]*return apiPost\(/);
+  assert.match(source, /dockerfile: "dockerfile"/);
+  assert.match(source, /HEAVY_DIR_NAMES = \{ "node_modules": true, "\.git": true \}/);
+});
+
+test("node_modules stays hidden until the tree toggle is turned off", async () => {
+  const c = client(); await c.settle();
+  const tree = c.find((node) => node.type?.name === "TreeNode");
+  const heavy = { type: "directory", name: "node_modules", path: "/workspace/node_modules", children: [] };
+  assert.equal(tree.type({ ...tree.props, hideHeavy: true, filterQuery: "", node: heavy }), null);
+  assert.ok(tree.type({ ...tree.props, hideHeavy: false, filterQuery: "", node: heavy }));
+  assert.equal(tree.type({ ...tree.props, hideHeavy: false, filterQuery: "readme", node: heavy }), null);
+  assert.ok(tree.type({ ...tree.props, hideHeavy: false, filterQuery: "node", node: heavy }));
+});
+
 test("sidebar unmount removes owned global listeners and remount does not duplicate them", async () => {
   const c = client(); await c.open(); c.drag();
   for (const name of ["keydown", "dragover", "drop", "dragend"]) assert.equal(c.listenerCount(name), 1);

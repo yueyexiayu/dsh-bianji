@@ -164,11 +164,13 @@ test("UTF-8 BOM and line endings round-trip byte-for-byte", async (t) => {
 for (const [label, content] of [
   ["NUL", "local\0draft"],
   ["NUL beyond the sample", "a".repeat(9000) + "\0"],
+  ["control byte beyond the sample", "a".repeat(9000) + "\u0001"],
   ["unpaired high surrogate", "local\ud800draft"],
   ["unpaired low surrogate", "local\udfffdraft"],
 ]) {
   test(`save refuses ${label} before calling the protected writer`, async (t) => {
     const h = await host(t); const read = await h.read();
+    assert.equal(read.ok, true, JSON.stringify(read));
     const result = await h.write(content, read.version);
     assert.equal(result.status, 400);
     assert.equal(result.body.code, "FS_NOT_TEXT");

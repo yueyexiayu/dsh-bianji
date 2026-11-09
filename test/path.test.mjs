@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { isPathInside, isBinaryPath, looksBinary } from "../lib/parse.js";
+import { isPathInside, isBinaryPath, looksBinary, mediaContentType } from "../lib/parse.js";
 
 describe("isPathInside", () => {
   it("accepts the root itself", () => {
@@ -30,5 +30,18 @@ describe("binary policy", () => {
     assert.equal(looksBinary(Buffer.from([65, 0, 66])), true);
     assert.equal(looksBinary(Buffer.concat([Buffer.alloc(9000, 65), Buffer.from([0])])), true);
     assert.equal(looksBinary(Buffer.from("hello\n")), false);
+  });
+
+  it("detects unsupported control bytes beyond the sample window", () => {
+    assert.equal(looksBinary(Buffer.concat([Buffer.alloc(9000, 65), Buffer.from([1])])), true);
+  });
+});
+
+describe("media types", () => {
+  it("uses the container MIME type instead of treating every AAC or MOV as MP4", () => {
+    assert.equal(mediaContentType("audio", "aac"), "audio/aac");
+    assert.equal(mediaContentType("audio", "m4a"), "audio/mp4");
+    assert.equal(mediaContentType("video", "mov"), "video/quicktime");
+    assert.equal(mediaContentType("video", "m4v"), "video/mp4");
   });
 });

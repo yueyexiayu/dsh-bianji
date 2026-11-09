@@ -53,6 +53,8 @@ async function host(t) {
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const png = path.join(root, "pic.png");
   await fs.writeFile(png, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 1, 2, 3]));
+  const video = path.join(root, "clip.mp4");
+  await fs.writeFile(video, Buffer.from("0123456789"));
   const pdf = path.join(root, "doc.pdf");
   await fs.writeFile(pdf, Buffer.from("%PDF-1.4\n% preview\n"));
   const docx = path.join(root, "note.docx");
@@ -89,7 +91,7 @@ async function host(t) {
     const body = type.includes("json") ? await response.json() : Buffer.from(await response.arrayBuffer());
     return { status: response.status, type, body, headers: response.headers };
   }
-  return { root, png, pdf, docx, pptx, xlsx, call };
+  return { root, png, video, pdf, docx, pptx, xlsx, service, call };
 }
 
 test("fileKind classifies previewable types without treating them as editable text", () => {
@@ -140,6 +142,66 @@ test("media serves image bytes and rejects path escape", async (t) => {
   const escaped = await h.call("media", outside);
   assert.equal(escaped.status, 400);
   assert.equal(escaped.body.ok, false);
+});
+
+test("media read rejects a file swapped to an outside symlink after resolution", async (t) => {
+  const h = await host(t);
+  const outsideDir = await fs.mkdtemp(path.join(tmpdir(), "bianji-preview-out-"));
+  t.after(() => fs.rm(outsideDir, { recursive: true, force: true }));
+  const outside = path.join(outsideDir, "secret.png");
+  const outsideBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9]);
+  await fs.writeFile(outside, outsideBytes);
+  h.service.readBytes = async (target) => {
+    await fs.unlink(h.png);
+    await fs.symlink(outside, h.png);
+    return fs.readFile(target.targetKey);
+  };
+  const media = await h.call("media", h.png);
+  assert.equal(media.status, 400);
+  assert.equal(media.body.ok, false);
+  assert.equal(media.body.error.includes("escapes workspace"), true);
+  assert.notDeepEqual(media.body, outsideBytes);
+});
+
+test("video ranges use the protected byte-range reader", async (t) => {
+  const h = await host(t);
+  let fullReads = 0;
+  const ranges = [];
+  h.service.readBytes = async (target) => { fullReads += 1; return fs.readFile(target.targetKey); };
+  h.service.readByteRange = async (target, range) => {
+    ranges.push(range);
+    const bytes = await fs.readFile(target.targetKey);
+    return bytes.subarray(range.offset, range.offset + range.length);
+  };
+  const media = await h.call("media", h.video, { headers: { range: "bytes=2-5" } });
+  assert.equal(media.status, 206);
+  assert.equal(media.body.toString(), "2345");
+  assert.equal(media.headers.get("content-range"), "bytes 2-5/10");
+  assert.deepEqual(ranges, [{ offset: 2, length: 4 }]);
+  assert.equal(fullReads, 0);
+  delete h.service.readByteRange;
+  const fallback = await h.call("media", h.video, { headers: { range: "bytes=4-" } });
+  assert.equal(fallback.status, 206);
+  assert.equal(fallback.body.toString(), "456789");
+  assert.equal(fullReads, 1);
+});
+
+test("video range read rejects a symlink swap during the byte read", async (t) => {
+  const h = await host(t);
+  const outsideDir = await fs.mkdtemp(path.join(tmpdir(), "bianji-range-out-"));
+  t.after(() => fs.rm(outsideDir, { recursive: true, force: true }));
+  const outside = path.join(outsideDir, "secret.mp4");
+  await fs.writeFile(outside, "outside-secret");
+  h.service.readByteRange = async (target, range) => {
+    await fs.unlink(h.video);
+    await fs.symlink(outside, h.video);
+    const bytes = await fs.readFile(target.targetKey);
+    return bytes.subarray(range.offset, range.offset + range.length);
+  };
+  const media = await h.call("media", h.video, { headers: { range: "bytes=2-5" } });
+  assert.equal(media.status, 400);
+  assert.equal(media.body.ok, false);
+  assert.equal(media.body.error.includes("escapes workspace"), true);
 });
 
 test("pdf and office open as read-only previews", async (t) => {

@@ -40,7 +40,7 @@ async function host(t, mode = "workspace-write") {
     const response = await route.fetch(req);
     return { status: response.status, body: await response.json() };
   }
-  return { root, file, service, policy, read: (filePath) => request("read", filePath), write: (content, version, filePath) => request("write", filePath, { content, version }) };
+  return { root, file, service, policy, route, read: (filePath) => request("read", filePath), write: (content, version, filePath) => request("write", filePath, { content, version }) };
 }
 
 async function coldHost(t) {
@@ -225,6 +225,31 @@ check("official FS: provider read-time symlink swap never returns outside conten
     return readBytes(...args);
   };
   const result = await h.read(); assert.equal(result.body.ok, false); assert.equal(result.body.content, undefined);
+});
+
+check("official FS: media read-time symlink swap never serves outside content", async (t) => {
+  const h = await host(t, "danger-full-access"); const outside = path.join(h.root, "..", path.basename(h.root) + "-outside.png");
+  const image = path.join(h.root, "image.png"); const outsideBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9]);
+  await fs.writeFile(image, outsideBytes); await fs.writeFile(outside, outsideBytes); t.after(() => fs.unlink(outside));
+  const readBytes = h.service.readBytes.bind(h.service);
+  h.service.readBytes = async (...args) => {
+    await fs.unlink(image); await fs.symlink(outside, image);
+    return readBytes(...args);
+  };
+  const response = await h.route.fetch(new Request("http://local/api/bianji?" + new URLSearchParams({ action: "media", sessionId: "s", path: image })));
+  const body = await response.json();
+  assert.equal(response.status, 400); assert.equal(body.ok, false);
+  assert.equal(Buffer.isBuffer(body.bytes), false);
+});
+
+check("official FS: media ranges use the provider's byte-range reader", async (t) => {
+  const h = await host(t); const video = path.join(h.root, "clip.mp4");
+  await fs.writeFile(video, "0123456789");
+  const readByteRange = h.service.readByteRange.bind(h.service); let ranges = 0;
+  h.service.readByteRange = (...args) => { ranges += 1; return readByteRange(...args); };
+  const response = await h.route.fetch(new Request("http://local/api/bianji?" + new URLSearchParams({ action: "media", sessionId: "s", path: video }), { headers: { range: "bytes=2-5" } }));
+  assert.equal(response.status, 206); assert.equal(await response.text(), "2345");
+  assert.equal(response.headers.get("content-range"), "bytes 2-5/10"); assert.equal(ranges, 1);
 });
 
 check("official FS: AI must reread after editor save before editing", async (t) => {

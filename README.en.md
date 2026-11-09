@@ -4,13 +4,13 @@
 <p><strong>Edit beside the conversation. Keep your workspace and drafts connected.</strong></p>
 <p>A file tree, Monaco editing and Markdown preview in the DeepSeek Harness desktop sidebar.</p>
 <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-<p><a href="package.json">v0.1.6</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.1.7</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#saving-and-boundaries">Saving and boundaries</a> · <a href="#validation">Validation</a></p>
 </div>
 
 ---
 
-A desktop plugin tailored to a personal workflow. Treat it as a reference and verify compatibility before copying it to another DSH version. It keeps its own `kind: bianji`, does not replace the official file panel and is not the native macOS Edit menu. Checked against desktop **0.2.2-alpha.2**.
+A desktop plugin tailored to a personal workflow. Treat it as a reference and verify compatibility before copying it to another DSH version. It keeps its own `kind: bianji`, does not replace the official file panel and is not the native macOS Edit menu. Checked against desktop **0.2.2-rc.1**.
 
 ## Features
 
@@ -49,12 +49,12 @@ git clone https://github.com/yueyexiayu/dsh-bianji.git "$DSH_HOME/plugins/bianji
 
 - Reads and writes stay inside the session workspace `cwd`. Missing sessionId / absolute cwd (including relative cwd) returns 400; unknown session 404; unavailable inspection 503; corrupt history 500. Errors do not become an empty workspace.
 - Strict UTF-8: binary, non-UTF-8 input such as GBK, and oversized files fail explicitly. BOM and line endings are preserved. Saves reject NUL, lone surrogates and unsupported control bytes.
-- POSIX backslashes remain filename characters. Paths and actual targets must remain inside the workspace. Checks reject reproduced symlink-replacement escapes, but are not kernel-level atomic isolation.
+- POSIX backslashes remain filename characters. Paths and actual targets must remain inside the workspace. Text, media and Office preview reads use the official filesystem service with version checks; reproduced symlink-replacement escapes are rejected, but this is not kernel-level atomic isolation.
 - Cold history uses an unpublished `sessions.prepare` snapshot to restore its permissions, without creating/resuming an Agent or inheriting permissive Host policy. Missing policy/version services deny saves.
 - External writes, replacement or deletion conflict with an old version. Deleted files are not recreated. Drafts survive conflict and failed saves; reloading requires confirmation before discarding local edits.
 - Reloading locks save/close; editing during a read cancels obsolete reload results. Per-session drafts live in Client memory: **refreshing, fully quitting or disabling the plugin loses them**. Save or copy first.
 - Version checks share the official AI tools' filesystem instance and write lock. They are not an OS-wide conditional write; another editor can still write between the check and atomic replacement.
-- Markdown emits escaped restricted tags and HTTP(S) links, not executable raw HTML. Finder and directory failures remain visible. Write/reveal requests share the 15s timeout used for directory reads.
+- Markdown emits escaped restricted tags and HTTP(S) links, not executable raw HTML. Audio/video Range requests read only the requested bytes when the service supports byte ranges. Finder and directory failures remain visible. Write/reveal requests share the 15s timeout used for directory reads.
 - No installer, accounts or credentials.
 
 ## Validation
@@ -80,7 +80,7 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 
 Ordinary Node can also use `BIANJI_OFFICIAL_RUNTIME` pointing to a read-only extracted reference. `test/client-security.test.mjs` requires Playwright, React/ReactDOM 18 UMD and a matching Chromium headless shell, configured by `BIANJI_PLAYWRIGHT_MODULE`, `BIANJI_CHROMIUM_EXECUTABLE`, `BIANJI_REACT_UMD` and `BIANJI_REACT_DOM_UMD`. Do not substitute the user's Chrome or a full Chrome.app for windowless validation.
 
-On 2026-10-29 against desktop **0.2.2-alpha.2**, `SessionController.inspect` is gone and cold history uses `sessionQuery.observeSession`. Unit tests: 87 passed. Official Electron integration: 20 passed. Browser XSS cases skipped here without Playwright/React UMD and are not a pass. This is not end-to-end proof that the latest desktop Host was reloaded with ⌘Q.
+On 2026-11-09 against desktop **0.2.2-rc.1**, the standard Node suite passed 102 tests; 2 browser cases and 22 installed-runtime cases were skipped by environment. The installed-runtime integration passed all 22 cases when run separately. Browser XSS cases were skipped here without Playwright/React UMD and are not a pass. This is not end-to-end proof that the latest desktop Host was reloaded with ⌘Q.
 
 </details>
 

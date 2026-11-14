@@ -4,7 +4,7 @@
 <p><strong>Edit beside the conversation. Keep your workspace and drafts connected.</strong></p>
 <p>A file tree, Monaco editing and Markdown preview in the DeepSeek Harness desktop sidebar.</p>
 <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-<p><a href="package.json">v0.1.7</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.2.0</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#saving-and-boundaries">Saving and boundaries</a> · <a href="#validation">Validation</a></p>
 </div>
 
@@ -15,20 +15,23 @@ A desktop plugin tailored to a personal workflow. Treat it as a reference and ve
 ## Features
 
 <table><tr>
-<td width="33%"><strong>🗂 Workspace tree</strong><br/><br/>Resolve files from the current session and open them beside the conversation, without starting an Agent to inspect history. Hides <code>node_modules</code> / <code>.git</code> by default and can filter by filename.</td>
+<td width="33%"><strong>🗂 Workspace tree and search</strong><br/><br/>Resolve files from the current session and open them beside the conversation, without starting an Agent to inspect history. Search file names or text with bounded file counts, per-file matches and text sizes.</td>
 <td width="33%"><strong>✍️ Editing and preview</strong><br/><br/>Monaco and a restricted Markdown preview. Images, audio, video and PDF open read-only; docx/pptx/xlsx show extracted text or a table glance. Binary and Office originals are not saved here.</td>
 <td width="33%"><strong>🧾 Version-aware writes</strong><br/><br/>Read a version and save through the official replaceIfVersion service. Conflicts pause autosave, not discard drafts.</td>
 </tr><tr>
-<td><strong>🔗 Conversation references</strong><br/><br/>Add to chat, copy a path, reveal in Finder or drag into the composer as an @reference.</td>
+<td><strong>🔗 Native reference entry</strong><br/><br/>Type <code>@</code> to search the session workspace. Add to chat, copy a path, reveal in Finder or drag into the composer. The tree and search results support multi-select, Shift ranges and batch insertion.</td>
 <td><strong>💾 Per-file autosave</strong><br/><br/>Preserve newer edits during in-flight saves; copy local content before reloading a failed or conflicted file.</td>
 <td><strong>🛡 Session policy</strong><br/><br/>Constrain operations to the workspace and reuse official filesystem services and that session's sandbox permissions.</td>
 </tr></table>
+
+- **Persisted settings**: the panel and DSH settings domain share `hideNoise`, `refStyle`, `searchContent` and `searchLimit`; values live in the current Profile and survive restarts.
+- **Synchronized zh/en UI**: the interface, settings, search states and native `@` source use one dictionary pair registered through the DSH locale service.
 
 ## How it works
 
 ![A session workspace is read through official services into an editing draft; saving checks session policy and file version.](docs/repo-assets/workflow.en.svg)
 
-The workspace comes from a live Agent first; an attached Session without an Agent uses `sessions.get`; cold history uses official `sessionQuery.observeSession` (`projectionMode: "none"`, disposed after the read). Older hosts that still expose `sessionController.inspect` remain a fallback. Saving resolves policy again and uses the official filesystem and version lock—not direct arbitrary disk writes from the Client.
+The workspace comes from a live Agent first; an attached Session without an Agent uses `sessions.get`; cold history uses official `sessionQuery.observeSession` (`projectionMode: "none"`, disposed after the read). Older hosts that still expose `sessionController.inspect` remain a fallback. Search still resolves cwd from `sessionId`, and content reads use the official filesystem service. Saving resolves policy again and uses the version lock—not direct arbitrary disk writes from the Client.
 
 ## Quick start
 
@@ -80,7 +83,7 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 
 Ordinary Node can also use `BIANJI_OFFICIAL_RUNTIME` pointing to a read-only extracted reference. `test/client-security.test.mjs` requires Playwright, React/ReactDOM 18 UMD and a matching Chromium headless shell, configured by `BIANJI_PLAYWRIGHT_MODULE`, `BIANJI_CHROMIUM_EXECUTABLE`, `BIANJI_REACT_UMD` and `BIANJI_REACT_DOM_UMD`. Do not substitute the user's Chrome or a full Chrome.app for windowless validation.
 
-On 2026-11-09 against desktop **0.2.2-rc.1**, the standard Node suite passed 102 tests; 2 browser cases and 22 installed-runtime cases were skipped by environment. The installed-runtime integration passed all 22 cases when run separately. Browser XSS cases were skipped here without Playwright/React UMD and are not a pass. This is not end-to-end proof that the latest desktop Host was reloaded with ⌘Q.
+On 2026-11-14 against desktop **0.2.2-rc.1**, the standard Node suite passed 112 tests and skipped 24 (2 browser cases and 22 installed-runtime cases). The installed-runtime integration passed all 22 cases when run separately. Browser XSS cases were skipped here without Playwright/React UMD and are not a pass. The reloaded desktop was checked at runtime for file-type icons, multi-select and persisted settings in Chinese; English locale was not re-run this round.
 
 </details>
 

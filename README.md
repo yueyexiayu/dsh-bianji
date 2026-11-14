@@ -4,7 +4,7 @@
 <p><strong>在对话旁编辑文件，让草稿与工作区保持连贯。</strong></p>
 <p>DeepSeek Harness 桌面端右侧栏的文件树、Monaco 编辑与 Markdown 预览。</p>
 <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-<p><a href="package.json">v0.1.7</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.2.0</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#核心能力">核心能力</a> · <a href="#工作方式">工作方式</a> · <a href="#快速开始">快速开始</a> · <a href="#保存与边界">保存与边界</a> · <a href="#验证">验证</a></p>
 </div>
 
@@ -15,20 +15,23 @@
 ## 核心能力
 
 <table><tr>
-<td width="33%"><strong>🗂 工作区文件树</strong><br/><br/>从当前会话解析工作区，浏览文件并在右侧打开；不为读取历史会话启动 Agent。默认隐藏 <code>node_modules</code> / <code>.git</code>，可过滤文件名。</td>
+<td width="33%"><strong>🗂 工作区文件树与搜索</strong><br/><br/>从当前会话解析工作区，浏览文件并在右侧打开；不为读取历史会话启动 Agent。可按文件名或正文搜索，结果限制扫描文件数、单文件命中数和文本大小。</td>
 <td width="33%"><strong>✍️ 文本与预览</strong><br/><br/>Monaco 编辑、受限 Markdown 预览；图片/音视频/PDF 只读查看；docx/pptx/xlsx 抽文本或表格预览。不在此编辑二进制或 Office 原件。</td>
 <td width="33%"><strong>🧾 版本保护</strong><br/><br/>读取版本并使用官方 replaceIfVersion 保存，冲突暂停自动保存而不丢弃草稿。</td>
 </tr><tr>
-<td><strong>🔗 对话引用</strong><br/><br/>右键添加到对话、复制路径、访达打开，或拖到输入框插入 @引用。</td>
+<td><strong>🔗 原生引用入口</strong><br/><br/>输入 <code>@</code> 直接搜索会话工作区；右键添加到对话、复制路径、访达打开，也可拖入输入框。文件树和搜索结果均支持多选、Shift 范围选择和批量插入引用。</td>
 <td><strong>💾 独立自动保存</strong><br/><br/>逐文件安排保存，在途输入保留最新草稿；失败或冲突可复制本地内容后重载。</td>
 <td><strong>🛡 会话策略</strong><br/><br/>读写限定在当前工作区，并复用官方文件服务和该会话的沙箱权限。</td>
 </tr></table>
+
+- **持久化设置**：面板内和 DSH 设置域共用 `hideNoise`、`refStyle`、`searchContent`、`searchLimit`，值写入当前 Profile，重启后保留。
+- **中英文同步**：界面、设置、搜索状态与原生 `@` 菜单通过 DSH locale 服务注册同一套中英词典。
 
 ## 工作方式
 
 ![会话工作区经文件服务加载为编辑草稿，保存时核对权限与文件版本。](docs/repo-assets/workflow.zh-CN.svg)
 
-工作区优先来自 live Agent；已 attached、无 Agent 的 Session 走 `sessions.get`；冷历史走官方 `sessionQuery.observeSession`（`projectionMode: "none"`，读完即 dispose）。旧 Host 若仍有 `sessionController.inspect` 则作为兜底。保存重新解析权限，经官方文件服务及版本锁执行；不是由 Client 直接写任意磁盘路径。
+工作区优先来自 live Agent；已 attached、无 Agent 的 Session 走 `sessions.get`；冷历史走官方 `sessionQuery.observeSession`（`projectionMode: "none"`，读完即 dispose）。旧 Host 若仍有 `sessionController.inspect` 则作为兜底。搜索仍按 `sessionId` 解析 cwd，正文读取继续经官方文件服务；保存重新解析权限，经版本锁执行。不是由 Client 直接写任意磁盘路径。
 
 ## 快速开始
 
@@ -80,7 +83,7 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 
 也可在普通 Node 中以 `BIANJI_OFFICIAL_RUNTIME` 指向只读解包参考。`test/client-security.test.mjs` 需要实际 Playwright、React/ReactDOM 18 UMD 和匹配的 Chromium headless shell；配置键为 `BIANJI_PLAYWRIGHT_MODULE`、`BIANJI_CHROMIUM_EXECUTABLE`、`BIANJI_REACT_UMD`、`BIANJI_REACT_DOM_UMD`。不要用用户 Chrome 或完整 Chrome.app 冒充无窗口验收。
 
-2026-11-09 对照本机桌面 **0.2.2-rc.1**：标准 Node 测试 102 通过，2 个浏览器用例和 22 个安装运行时用例按环境跳过；安装运行时集成单独运行 22 个全部通过。浏览器 XSS 用例在本机未安装 Playwright/React UMD，不能计为通过。这不等于已 ⌘Q 重开后的桌面端到端可见性验收。
+2026-11-14 对照本机桌面 **0.2.2-rc.1**：标准 Node 测试 112 通过、24 跳过（2 个浏览器用例和 22 个安装运行时用例）；安装运行时集成单独运行 22 个全部通过。浏览器 XSS 用例在本机未安装 Playwright/React UMD，不能计为通过。中文界面已在重新加载后的桌面端完成文件图标、多选与设置持久化运行态检查；英文界面未在本轮重新执行。
 
 </details>
 

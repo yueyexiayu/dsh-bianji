@@ -6,9 +6,12 @@ import vm from "node:vm";
 const tick = () => new Promise(setImmediate);
 function client(options = {}) {
   let plugin; let FilesTab; let cursor = 0; let tree; let tabDefinition;
+  let triggerSource; let localeRegistered; const localeLanguage = options.locale || "zh";
+  let settingsValue = options.settings || { hideNoise: true, refStyle: "relative", searchContent: true, searchLimit: 100 };
   let hooks = [];
   const effects = []; const timers = new Map(); const writes = []; const reads = [];
   const listeners = new Map(); const failures = new Map(Object.entries(options.failures ?? {})); const scripts = []; const timeoutDelays = [];
+  const settingsUpdates = []; const insertedTexts = [];
   let inserted = 0;
   const composerRoot = { isContentEditable: true, contains: (target) => target === composerRoot };
   let delayRead = false;
@@ -60,6 +63,7 @@ function client(options = {}) {
         });
       }
       if (params.get("action") === "read" && delayRead) return new Promise((resolve) => reads.push({ finish: (body) => resolve({ json: async () => body }) }));
+      if (params.get("action") === "search") return Promise.resolve({ json: async () => ({ ok: true, results: options.searchResults || [], scanned: options.searchScanned || (options.searchResults || []).length, truncated: !!options.searchTruncated }) });
       return Promise.resolve({ json: async () => (params.get("action") === "read" || params.get("action") === "open")
         ? { ok: true, kind: "text", path: params.get("path"), relative: "a.txt", ...disk }
         : { ok: true, root: "/workspace", entries: [{ name: "a.txt", type: "file", path: "/workspace/a.txt", relative: "a.txt" }] } });
@@ -72,10 +76,20 @@ function client(options = {}) {
       return signal;
     } } } : {}),
   });
-  const shell = { editor: { getRootElement: () => composerRoot }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference() { inserted++; return true; } };
+  const shell = { editor: { getRootElement: () => composerRoot }, snapshot: { phase: "plain", draft: "", draftRev: 1 }, insertReference() { inserted++; return true; }, insertText(text) { insertedTexts.push(text); return true; } };
   plugin.apply({ get(name) {
     if (name === "sessions") return { binding: (id) => id ? { ctx: { sessionId: id } } : undefined };
     if (name === "conversation") return { input: { for: () => shell, shell: () => { throw new Error("plugin must not call input.shell"); } } };
+    if (name === "inputTriggers" && options.inputTriggers) return { registerSource(source) { triggerSource = source; return () => { triggerSource = null; }; } };
+    if (name === "locale" && options.locale) return {
+      register(_ns, dictionaries) { localeRegistered = dictionaries; },
+      bind() { const dictionaries = localeRegistered; return (key) => dictionaries?.[localeLanguage]?.[key] ?? key; },
+    };
+    if (name === "configForms" && options.configForm) return { get() { return {
+      getSnapshot: () => ({ status: "ready", value: settingsValue }),
+      subscribe: () => () => {},
+      set(field, value) { settingsUpdates.push({ field, value }); settingsValue = { ...settingsValue, [field]: value }; return Promise.resolve(true); },
+    }; } };
   }, effect: (callback) => callback(), sidebarRightTabs: { register(definition) { tabDefinition = definition; } }, slots: {
     inject(_name, callback) { return callback(); }, register(options, component) { if (options.name === "sidebar.right.pane.tab") FilesTab = component; },
   } });
@@ -90,7 +104,8 @@ function client(options = {}) {
   }
   render();
   return {
-    writes, reads, render, find, scripts, composerRoot, timeoutDelays, tabDefinition,
+    writes, reads, render, find, scripts, composerRoot, timeoutDelays, tabDefinition, root: () => tree,
+    triggerSource: () => triggerSource, localeRegistered: () => localeRegistered, settingsUpdates, insertedTexts,
     flushTimers() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach((callback) => callback()); },
     fail(action, failure) { failures.set(action, failure); },
     focusPanel(target) { tree.props.ref.current = { contains: (value) => value === target }; },
@@ -102,6 +117,8 @@ function client(options = {}) {
     inserted: () => inserted,
     listenerCount(name) { return listeners.get(name)?.size ?? 0; },
     drag() { find((node) => node.type?.name === "TreeNode").props.onDragNode({ type: "file", relative: "a.txt", name: "a.txt" }); },
+    async filter(query) { find((node) => node.type === "input" && node.props.className === "dshf-filter").props.onChange({ target: { value: query } }); render(); await tick(); this.flushTimers(); await tick(); await tick(); render(); },
+    insertSelected() { find((node) => node.type === "button" && node.children[0] === "插入所选引用").props.onClick(); render(); },
     delayReads() { delayRead = true; },
     unmount() { for (const hook of hooks) hook?.cleanup?.(); hooks = []; },
     mount(sessionId = "s") { props = FilesTab({ sessionId }).props; render(); },
@@ -141,6 +158,75 @@ test("editor uses a distinct labelled entry without replacing official files", (
   const c = client();
   assert.equal(c.tabDefinition.kind, "bianji"); assert.equal(c.tabDefinition.title(), "编辑器");
   assert.equal(c.tabDefinition.guide[0].title(), "编辑器");
+  c.unmount();
+});
+
+test("registers English dictionaries through the DSH locale service", () => {
+  const c = client({ locale: "en" });
+  assert.equal(c.tabDefinition.title(), "Editor");
+  assert.equal(c.localeRegistered().en["title.editor"], "Editor");
+  const zhFile = JSON.parse(readFileSync(new URL("../locale/zh.json", import.meta.url), "utf8"));
+  const enFile = JSON.parse(readFileSync(new URL("../locale/en.json", import.meta.url), "utf8"));
+  assert.deepEqual(Object.keys(c.localeRegistered().zh).sort(), Object.keys(zhFile).filter((key) => key !== "meta").sort());
+  assert.deepEqual(Object.keys(c.localeRegistered().en).sort(), Object.keys(enFile).filter((key) => key !== "meta").sort());
+  c.unmount();
+});
+
+test("registers a native @ source that searches and inserts a workspace reference", async () => {
+  const c = client({ inputTriggers: true, searchResults: [
+    { type: "file", name: "a.txt", relative: "src/a.txt", path: "/workspace/src/a.txt", matches: [] },
+  ] });
+  const source = c.triggerSource();
+  assert.equal(source.trigger, "@");
+  const candidates = await source.candidates({ sessionId: "s" }, { query: "a", signal: undefined });
+  assert.equal(candidates[0].name, "src/a.txt");
+  assert.equal(candidates[0].icon, "file");
+  const outcome = source.onPick({ session: { sessionId: "s" }, candidate: candidates[0] });
+  assert.equal(outcome.text, "@src/a.txt "); assert.equal(outcome.continue, false);
+  c.unmount();
+});
+
+test("content search renders flat hits and selects multiple references for one insert", async () => {
+  const results = [
+    { type: "file", name: "a.txt", relative: "a.txt", path: "/workspace/a.txt", matches: [{ line: 2, text: "const needle = 1", start: 6, end: 12 }] },
+    { type: "directory", name: "src", relative: "src", path: "/workspace/src", matches: [] },
+  ];
+  const c = client({ searchResults: results });
+  await c.filter("needle");
+  const rendered = c.find((node) => typeof node.type === "function" && Array.isArray(node.props.results));
+  const hits = rendered.type(rendered.props);
+  assert.ok(JSON.stringify(hits).includes("dshf-search-hit"));
+  const current = c.find((node) => typeof node.type === "function" && Array.isArray(node.props.results));
+  current.props.onSelect(results[0], { shiftKey: false }); c.render();
+  current.props.onSelect(results[1], { shiftKey: false }); c.render();
+  c.insertSelected();
+  assert.deepEqual(c.insertedTexts, ["@a.txt @src/ "]);
+  c.unmount();
+});
+
+test("the tree uses file-type icons by default and exposes selection intentionally", async () => {
+  const c = client(); await c.settle();
+  const tree = c.find((node) => node.type?.name === "TreeNode");
+  assert.equal(tree.props.selectionMode, false);
+  assert.equal(tree.props.selectedPaths[tree.props.node.path], undefined);
+  const rows = tree.type({ ...tree.props, node: {
+    type: "file", name: "README.md", relative: "README.md", path: "/workspace/README.md",
+  } });
+  const glyph = c.find((node) => node.type?.name === "ItemGlyph", rows);
+  const svgText = c.find((node) => node.type === "text", glyph.type(glyph.props));
+  assert.equal(svgText.children[0], "MD");
+  c.find((node) => node.type === "button" && node.children[0] === "多选").props.onClick(); c.render();
+  assert.equal(c.find((node) => node.type?.name === "TreeNode").props.selectionMode, true);
+  c.unmount();
+});
+
+test("panel settings write through configForms and update reference formatting", async () => {
+  const c = client({ configForm: true });
+  const hideButton = c.find((node) => node.type === "button" && String(node.props.title || "").includes("显示 node_modules"));
+  hideButton.props.onClick(); c.render();
+  assert.deepEqual(c.settingsUpdates[0], { field: "hideNoise", value: false });
+  await c.settle();
+  assert.equal(JSON.stringify(c.root()).split("设置已保存").length - 1, 1);
   c.unmount();
 });
 

@@ -4,13 +4,13 @@
 <p><strong>Edit beside the conversation. Keep your workspace and drafts connected.</strong></p>
 <p>A file tree, Monaco editing and Markdown preview in the DeepSeek Harness desktop sidebar.</p>
 <p><a href="README.md">简体中文</a> · <strong>English</strong></p>
-<p><a href="package.json">v0.2.0</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.2.1</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#features">Features</a> · <a href="#how-it-works">How it works</a> · <a href="#quick-start">Quick start</a> · <a href="#saving-and-boundaries">Saving and boundaries</a> · <a href="#validation">Validation</a></p>
 </div>
 
 ---
 
-A desktop plugin tailored to a personal workflow. Treat it as a reference and verify compatibility before copying it to another DSH version. It keeps its own `kind: bianji`, does not replace the official file panel and is not the native macOS Edit menu. Checked against desktop **0.2.2-rc.1**.
+A desktop plugin tailored to a personal workflow. Treat it as a reference and verify compatibility before copying it to another DSH version. It keeps its own `kind: bianji`, does not replace the official file panel and is not the native macOS Edit menu. Checked against desktop **0.2.2-rc.2**.
 
 ## Features
 
@@ -83,7 +83,7 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 
 Ordinary Node can also use `BIANJI_OFFICIAL_RUNTIME` pointing to a read-only extracted reference. `test/client-security.test.mjs` requires Playwright, React/ReactDOM 18 UMD and a matching Chromium headless shell, configured by `BIANJI_PLAYWRIGHT_MODULE`, `BIANJI_CHROMIUM_EXECUTABLE`, `BIANJI_REACT_UMD` and `BIANJI_REACT_DOM_UMD`. Do not substitute the user's Chrome or a full Chrome.app for windowless validation.
 
-On 2026-11-14 against desktop **0.2.2-rc.1**, the standard Node suite passed 112 tests and skipped 24 (2 browser cases and 22 installed-runtime cases). The installed-runtime integration passed all 22 cases when run separately. Browser XSS cases were skipped here without Playwright/React UMD and are not a pass. The reloaded desktop was checked at runtime for file-type icons, multi-select and persisted settings in Chinese; English locale was not re-run this round.
+On 2026-11-14 against desktop **0.2.2-rc.2**, the standard Node suite passed 112 tests and skipped 24 (2 browser cases and 22 installed-runtime cases). The installed-runtime integration passed all 22 cases when run separately. Browser XSS cases were skipped here without Playwright/React UMD and are not a pass. The reloaded desktop was checked at runtime for file-type icons, multi-select and persisted settings in Chinese; English locale was not re-run this round.
 
 </details>
 

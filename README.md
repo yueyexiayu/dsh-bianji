@@ -4,13 +4,13 @@
 <p><strong>在对话旁编辑文件，让草稿与工作区保持连贯。</strong></p>
 <p>DeepSeek Harness 桌面端右侧栏的文件树、Monaco 编辑与 Markdown 预览。</p>
 <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-<p><a href="package.json">v0.2.0</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
+<p><a href="package.json">v0.2.1</a> · <a href="LICENSE">MIT</a> · DSH desktop plugin</p>
 <p><a href="#核心能力">核心能力</a> · <a href="#工作方式">工作方式</a> · <a href="#快速开始">快速开始</a> · <a href="#保存与边界">保存与边界</a> · <a href="#验证">验证</a></p>
 </div>
 
 ---
 
-面向个人桌面工作流的文件编辑插件，可供参考，不建议未经核对直接照搬到其他 DSH 版本。它保留独立 `kind: bianji`，不替换官方文件面板，也不是 macOS 原生 Edit 菜单。已针对本机桌面 **0.2.2-rc.1** 核对。
+面向个人桌面工作流的文件编辑插件，可供参考，不建议未经核对直接照搬到其他 DSH 版本。它保留独立 `kind: bianji`，不替换官方文件面板，也不是 macOS 原生 Edit 菜单。已针对本机桌面 **0.2.2-rc.2** 核对。
 
 ## 核心能力
 
@@ -83,7 +83,7 @@ ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 
 也可在普通 Node 中以 `BIANJI_OFFICIAL_RUNTIME` 指向只读解包参考。`test/client-security.test.mjs` 需要实际 Playwright、React/ReactDOM 18 UMD 和匹配的 Chromium headless shell；配置键为 `BIANJI_PLAYWRIGHT_MODULE`、`BIANJI_CHROMIUM_EXECUTABLE`、`BIANJI_REACT_UMD`、`BIANJI_REACT_DOM_UMD`。不要用用户 Chrome 或完整 Chrome.app 冒充无窗口验收。
 
-2026-11-14 对照本机桌面 **0.2.2-rc.1**：标准 Node 测试 112 通过、24 跳过（2 个浏览器用例和 22 个安装运行时用例）；安装运行时集成单独运行 22 个全部通过。浏览器 XSS 用例在本机未安装 Playwright/React UMD，不能计为通过。中文界面已在重新加载后的桌面端完成文件图标、多选与设置持久化运行态检查；英文界面未在本轮重新执行。
+2026-11-14 对照本机桌面 **0.2.2-rc.2**：标准 Node 测试 112 通过、24 跳过（2 个浏览器用例和 22 个安装运行时用例）；安装运行时集成单独运行 22 个全部通过。浏览器 XSS 用例在本机未安装 Playwright/React UMD，不能计为通过。中文界面已在重新加载后的桌面端完成文件图标、多选与设置持久化运行态检查；英文界面未在本轮重新执行。
 
 </details>
 
